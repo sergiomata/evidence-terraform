@@ -14,18 +14,14 @@ data "aws_vpc" "default" {
   default = true
 }
 
-resource "aws_internet_gateway" "igw" {
-  vpc_id = "${data.aws_vpc.default.id}"
-}
-module "subnets" {
-  source              = "git::https://github.com/cloudposse/terraform-aws-dynamic-subnets.git?ref=master"
-  namespace           = "evidences subnets"
-  stage               = "${var.environment}"
-  name                = "evidence-subnets"
-  vpc_id              = "${data.aws_vpc.default.id}"
-  igw_id              = "${aws_internet_gateway.igw.id}"
-  cidr_block          = "10.0.0.0/16"
-  availability_zones  = ["us-east-1a","us-east-1b"]
+resource "aws_subnet" "public" {
+  count = var.subnet_public_number
+  vpc_id     = "${data.aws_vpc.default.id}"
+  cidr_block = "10.0.0.0/26"
+
+  tags = {
+    Name = "Public"
+  }
 }
 
 #############
@@ -36,7 +32,7 @@ module "aurora" {
   version                             = "~> 2.0"
   name                                = "evidences-database"
   engine                              = "aurora"  
-  subnets                             = module.subnets.public_subnet_ids
+  subnets                             = [aws_subnet.public.*.id]
   vpc_id                              = "${data.aws_vpc.default.id}"
   replica_count                       = 1
   instance_type                       = "db.t3.medium"
@@ -97,7 +93,7 @@ module "ec2_cluster"{
   key_name               = "ec2-evidence"
   monitoring             = true
   vpc_security_group_ids = ["${aws_security_group.ec2-sg.id}"]
-  subnet_ids              = module.subnets.public_subnet_ids
+  subnet_ids              =  [aws_subnet.public.*.id]
 
   tags = {
     Terraform   = "true"
